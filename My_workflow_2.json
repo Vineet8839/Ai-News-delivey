@@ -1,0 +1,188 @@
+{
+  "name": "My workflow 2",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 23 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "5ce76ac9-164a-4cb1-b08f-699c39fc30c6",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://newsapi.org/v2/everything?q=technology&from=2025-06-20&to=2025-06-20&sortBy=popularity&apiKey=de8cc23f36ca4d97a2f6a9fe44050fa8",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ],
+      "id": "a81b9912-14c8-4bf4-999d-3dc8561e88ba",
+      "name": "HTTP Request",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get all input items\nconst inputItems = $input.all();\n\nif (!inputItems.length || !inputItems[0].json?.articles) {\n  return [];\n}\n\nconst articles = inputItems[0].json.articles;\n\nconst cleanedArticles = articles\n  .filter(article => {\n    const title = article.title || '';\n    const description = article.description || '';\n    if (!title || title.toLowerCase().includes(\"advertisement\")) return false;\n    if (title.length < 10) return false;\n    if (!description || description.length < 20) return false;\n    return true;\n  })\n  .map(article => ({\n    title: article.title.trim(),\n    description: article.description,\n    source: article.source?.name || \"Unknown Source\",\n    url: article.url,\n    timestamp: new Date(article.publishedAt).toLocaleDateString()\n  }));\n\nreturn cleanedArticles.map(article => ({ json: article }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "id": "9da3cde1-c4ad-44e2-b5bf-690f7c9e359d",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api-inference.huggingface.co/models/facebook/bart-large-mnli",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"inputs\": \"'28 Years Later' Director Danny Boyle Says Shooting on iPhones Let Him Capture 'Startling' Violence. The British director tells WIRED nimble cameras are ideal for creating apocalyptic vibes and says he doesn’t watch zombie movies, despite his massive influence on the genre.\",\n  \"parameters\": {\n    \"candidate_labels\": [\"technology\", \"politics\", \"sports\", \"entertainment\", \"science\", \"business\"]\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ],
+      "id": "6349874d-d416-4828-8878-e37569e38c0d",
+      "name": "HTTP Request1",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "POyYWUzNTvGZM1nH",
+          "name": "Bearer Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Define user's preferred topics (can be updated dynamically later)\nconst userPreferences = [\"technology\", \"science\", \"business\"];\n\n// Get cleaned and classified articles from previous node\nconst articles = items;\n\n// Rank articles based on:\n// 1. User preference match\n// 2. Description length (longer = more detailed)\n// 3. Source credibility (optional)\n// 4. Date (latest first)\n\nconst rankedArticles = articles\n    .map(item => {\n        const article = item.json;\n        const topicMatch = userPreferences.includes(article.topic) ? 2 : 1;\n        const descriptionLength = article.description?.length || 0;\n        const dateScore = new Date(article.publishedAt || article.timestamp).getTime(); // newer articles get higher score\n\n        return {\n            ...article,\n            rankScore: topicMatch * descriptionLength + dateScore\n        };\n    })\n    .sort((a, b) => b.rankScore - a.rankScore)\n    .slice(0, 10); // Top 10 articles\n\n// Return in format n8n expects\nreturn rankedArticles.map(article => ({ json: article }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        0
+      ],
+      "id": "eb40f360-d8e0-4fed-ba35-5d3ce4ec6311",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "from": "+12185797812",
+        "to": "+18777804236",
+        "message": "hi sir how are you",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        0
+      ],
+      "id": "4512ecea-bf9d-48f4-98db-bf20ef928c59",
+      "name": "Twilio",
+      "alwaysOutputData": true,
+      "credentials": {
+        "twilioApi": {
+          "id": "I2nTGYFDXAV2APBJ",
+          "name": "Twilio account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Twilio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "6b9RGNDMWM4JvR5b"
+  },
+  "versionId": "c7dde90c-e2a0-4cac-a1d5-c587ed20e7ea",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "94e0c76791140ba4f4dbceeed110c9221c75274bb16442100d37bcdcd58b70dd"
+  },
+  "id": "6b9RGNDMWM4JvR5b",
+  "tags": []
+}
